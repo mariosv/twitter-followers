@@ -2,6 +2,10 @@
 twitter-followers
 =================
 
+.. caution::
+    This utility is no longer functional due to changes in the Twitter API
+
+
 Overview
 ========
 
