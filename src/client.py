@@ -1,26 +1,39 @@
-# This file is part of twitter-followers.
+# This file is part of twitter-network.
 #
-# Copyright (C) 2013 Marios Visvardis <visvardis.marios@gmail.com>
+# Copyright (C) 2013-2014 Marios Visvardis <visvardis.marios@gmail.com>
 #
-# twitter-followers is free software: you can redistribute it and/or modify
+# twitter-network is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 # 
-# twitter-followers is distributed in the hope that it will be useful,
+# twitter-network is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 # 
 # You should have received a copy of the GNU General Public License
-# along with twitter-followers.  If not, see <http://www.gnu.org/licenses/>.
+# along with twitter-network.  If not, see <http://www.gnu.org/licenses/>.
+"""Implementation of a Client for the Twitter REST API v.1.1.
 
+   Parts of the code are based on the twitter-application-only-auth project
+   <https://github.com/pabluk/twitter-application-only-auth>.
+   Especially parts related to Python versions compatibility.
+   
+"""
 import sys
+import base64
+import json
 
-import twitter
-
-from limiter import Limiter, Rate_limited
-from user import User
+try:
+    # For Python 3.0 and later
+    import urllib
+    from urllib.request import urlopen, Request
+    from urllib.error import HTTPError
+    from urllib.parse import quote, urlencode
+except:
+    from urllib2 import urlopen, Request, HTTPError, quote
+    from urllib import urlencode
 
 
 class Client_error(Exception):
@@ -28,32 +41,55 @@ class Client_error(Exception):
         super(Client_error, self).__init__(msg)
 
 
-class Client(Rate_limited):
-    """Twitter client that creates a connection on initialization.
-       OAuth credentials must be provided via the conf option.
-    
-    """
+class Client(object):
     def __init__(self, conf):
-        self.conf = conf
-        self.__connect()
-        limiter = Limiter(self.__con)
-        super(Client, self).__init__(limiter)
+        self._access_token = self._get_access_token(conf)
 
-    def get_user(self, name_or_id):
-        return User(name_or_id, self.__con, self.limiter)
+    def get_followers(self, user_id):
+        pass
 
-    def __connect(self):
+    def get_friends(self, user_id):
+        pass
+
+    # -------------------------------------------------------------------------
+    def _auth_request(self, url):
+        """Adds auth header and sends the given REST request"""
+        request = Request(url)
+        request.add_header('Authorization', 'Bearer %s' % self._access_token)
         try:
-            self.__con = twitter.Api(
-                consumer_key=self.conf.consumer_key,
-                consumer_secret=self.conf.consumer_secret,
-                access_token_key=self.conf.request_token_url,
-                access_token_secret=self.conf.access_token_url
-            )
-        except twitter.TwitterError as e:
+            response = urlopen(request)
+        except HTTPError as e:
             raise Client_error(str(e))
+        raw_data = response.read().decode('utf-8')
+        data = json.loads(raw_data)
+        return data
 
-    @Rate_limited._decor
-    def get_follower_ids(self, name_or_id):
-        return self.__con.GetFollowerIDs(name_or_id)['ids']
+    def _encode_key_and_secret(self, consumer_key, consumer_secret):
+        ck = quote(consumer_key)
+        cs = quote(consumer_secret)
+        s = ck + ':' + cs
+        encoded = base64.b64encode(s.encode('ascii'))
+        return encoded
 
+    def _get_access_token(self, conf):
+        encoded = self._encode_key_and_secret(conf.consumer_key,
+                                              conf.consumer_secret)
+        request = Request(conf.request_token_url)
+        request.add_header('Content-Type',
+                           'application/x-www-form-urlencoded;charset=UTF-8')
+        request.add_header('Authorization',
+                           'Basic %s' % encoded.decode('utf-8'))
+        request_data = 'grant_type=client_credentials'.encode('ascii')
+        if sys.version_info < (3,4):
+            request.add_data(request_data)
+        else:
+            request.data = request_data
+
+        try:
+            response = urlopen(request)
+        except HTTPError as e:
+            raise Client_error(str(e) + str(e.read()))
+
+        raw_data = response.read().decode('utf-8')
+        data = json.loads(raw_data)
+        return data['access_token']

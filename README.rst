@@ -1,5 +1,5 @@
 =================
-twitter-followers
+twitter-network
 =================
 
 .. caution::
@@ -9,18 +9,10 @@ twitter-followers
 Overview
 ========
 
-twitter-followers is an utility that generates the graph of the followers
-of a twitter user.
+twitter-network is an utility that generates the graph of the network
+of(around) a twitter user.
 
-The twitter request rate limiting policy is respected.
-
-A twitter user account is required and the appropriate credentials in order
-to be able to use the Twitter API via oauth.
-
-The graph is exported as a Graphviz dot file.
-
-python-twitter and networkx libraries are used.
-
+Should work with 2.6, 2.7, 3.3 and 3.4 Python versions
 
 
 Usage
@@ -34,7 +26,7 @@ appropriate values supplied by twitter.
 
 Then run::
 
-    python twitter_graph_gen.py -c cfg <user_name_or_id> <output_file> -d 2
+    python create_net.py -c cfg <user_name_or_id> <output_file> -d 2
 
 where -d 2 defines the desired recursion depth.
 
