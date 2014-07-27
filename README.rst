@@ -1,5 +1,5 @@
 =================
-twitter-followers
+twitter-network
 =================
 
 .. caution::
@@ -9,7 +9,7 @@ twitter-followers
 Overview
 ========
 
-twitter-followers is an utility that generates the graph of the followers
+twitter-network is an utility that generates the graph of the followers
 of a twitter user.
 
 The twitter request rate limiting policy is respected.
