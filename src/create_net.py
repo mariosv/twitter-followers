@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with twitter-network.  If not, see <http://www.gnu.org/licenses/>.
 import argparse
+import networkx as nx
 
 try:
     # Python >3
@@ -23,6 +24,7 @@ except:
     from ConfigParser import SafeConfigParser
 
 from client import Client
+from collector import Collector
 
 
 def parse_options():
@@ -51,11 +53,18 @@ def parse_options():
     parser.add_argument("--consumer_key", help="twitter API key")
     parser.add_argument("--consumer_secret", help="twitter API secret")
     parser.add_argument("--request_token_url",
-        default=endpoint + 'oauth2/token',
-        help="twitter API request token url")
+                        default=endpoint + 'oauth2/token',
+                        help="twitter API request token url")
     parser.add_argument('--request_rate_limit',
-        default=endpoint + '1.1/application/rate_limit_status.json',
-        help="twitter API rate limit request url")
+                        default=endpoint \
+                                + '1.1/application/rate_limit_status.json',
+                        help="twitter API rate limit request url")
+    parser.add_argument('--request_friends_url',
+                        default=endpoint + '1.1/friends/ids.json',
+                        help="twitter API friends/ids request url")
+    parser.add_argument('--request_followers_url',
+                        default=endpoint + '1.1/followers/ids.json',
+                        help="twitter API followers/ids request url")
     parser.add_argument("-d", "--depth", default=1, type=int,
                         help="search recursion depth")
 
@@ -72,9 +81,11 @@ def parse_options():
 
 def main():
     conf = parse_options()
-    c = Client(conf)
+    client = Client(conf)
+    collector = Collector(client, conf)
+    collector.collect(conf.start_user)
+    nx.write_dot(collector.graph, conf.output_file)
 
 # ------------------------------------------------------------------------------
 if __name__ == '__main__':
     main()
-

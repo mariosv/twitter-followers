@@ -15,9 +15,10 @@
 # You should have received a copy of the GNU General Public License
 # along with twitter-followers.  If not, see <http://www.gnu.org/licenses/>.
 
+import sys
 import networkx as nx
 
-import twitter
+from client import Client_error
 
 class Collector(object):
     """When collect() is called follower nodes are recursively visited and
@@ -31,31 +32,37 @@ class Collector(object):
 
     """
 
-    def __init__(self, client):
-        self.__client = client
+    def __init__(self, client, conf):
+        self._client = client
+        self._conf = conf
+        self._visited = set()
         self.graph = nx.DiGraph()
-        self.__visited = []
 
-    def collect(self, start):
-        self.__visit(start.uid, self.__client.conf.depth)
+    def collect(self, start_node):
+        self._visit(start_node, self._conf.depth)
 
-    def __visit(self, uid, depth):
+    def _visit(self, uid, depth):
         # terminate recursion
         if(depth) == 0:
             return
         depth -= 1
-        f = []
+        f = None
         try:
-            f = self.__client.get_follower_ids(uid)
-        except twitter.TwitterError:
-            # in case we are not authorized to get the follower ids for an
-            # account, the account is probably protected. do nothing
-            pass
-        print('%d followers: %d' % (uid, len(f)))
+            try:
+                cuid = int(uid)
+                ctype = 'user_id'
+            except:
+                cuid = uid
+                ctype = 'screen_name'
+            f = self._client.get_followers(**{ctype: cuid})
+        except Client_error as e:
+            sys.stderr.write('Error: %s\n' % str(e))
+            sys.exit(1)
+        print('%s followers: %d' % (str(uid), len(f)))
         for i in f:
             self.graph.add_edge(i, uid)
-            if i in self.__visited:
+            if i in self._visited:
                 continue
-            self.__visit(i, depth)
-        self.__visited.append(uid)
+            self._visit(i, depth)
+        self._visited.add(uid)
 

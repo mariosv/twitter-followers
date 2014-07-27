@@ -24,6 +24,7 @@
 import sys
 import base64
 import json
+import time
 
 try:
     # For Python 3.0 and later
@@ -42,16 +43,68 @@ class Client_error(Exception):
 
 
 class Client(object):
-    def __init__(self, conf):
-        self._access_token = self._get_access_token(conf)
+    """Client for the Twitter REST API v1.1. Only network discovery(followers,
+       friends) operations are supported.
+    
+       The Twitter rate limiting policy is respected. If the rate limit
+       is hit the program blocks until the next time window when the limit
+       is reset
 
-    def get_followers(self, user_id):
-        pass
+    """
+    def __init__(self, conf):
+        self._conf = conf
+        self._access_token = self._get_access_token()
+
+    def get_followers(self, **kwargs):
+        """Returns a list of the ids of the followers of the requested user.
+           Either user_id=id or screen_name=scr_name keyword arguments can be
+           used to specify the user.
+
+        """
+        idtype, idval = self._get_id(kwargs)
+        url = self._conf.request_followers_url
+        params = urlencode({idtype: idval})
+        url += '?' + params
+        return self._collect_result_ids(url)
 
     def get_friends(self, user_id):
-        pass
+        idtype, idval = self._get_id(kwargs)
+        url = self._conf.request_friends_url
+        params = urlencode({idtype: idval})
+        url += '?' + params
+        return self._collect_result_ids(url)
 
     # -------------------------------------------------------------------------
+    def _get_id(self, args):
+        """Dispatches function calls with user_id and screen_name arguments"""
+        idtype = 'user_id'
+        idval = None
+        if 'user_id' in args.keys():
+            assert 'screen_name' not in args.keys()
+            idval = args['user_id']
+        else:
+            assert 'screen_name' in args.keys()
+            idtype = 'screen_name'
+            idval = args['screen_name']
+        return idtype, idval
+
+    def _collect_result_ids(self, url):
+        """This function handles multi-page results. See more about cursoring:
+           https://dev.twitter.com/docs/misc/cursoring for more details
+
+        """
+        ids = []
+        cursor = -1
+        while True:
+            cursored_url = url + '&cursor=' + str(cursor)
+            response = self._auth_request(cursored_url)
+            ids += response['ids']
+            cursor = int(response['next_cursor'])
+            print('Ids retrieved: %d' % len(ids))
+            if 0 == cursor:
+                break
+        return ids
+
     def _auth_request(self, url):
         """Adds auth header and sends the given REST request"""
         request = Request(url)
@@ -59,10 +112,29 @@ class Client(object):
         try:
             response = urlopen(request)
         except HTTPError as e:
-            raise Client_error(str(e))
+            raise Client_error('Error loading url %s: %s' % (url, str(e)))
         raw_data = response.read().decode('utf-8')
+        self._check_rate_limiting_and_wait(response.info())
         data = json.loads(raw_data)
         return data
+
+    def _check_rate_limiting_and_wait(self, response_header):
+        """Read the HTTP response to find the number of requests of this
+           type allowed for the current time window. If the rate limit was hit,
+           wait(block) until the next window
+        """
+        rate_limit_remaining = int(response_header['X-Rate-Limit-Remaining'])
+        print("%d requests remaining" % (rate_limit_remaining))
+        if 0 == rate_limit_remaining:
+            next_window_time = int(response_header['X-Rate-Limit-Reset'])
+            # TODO: parse Date field to get the current "twitter" time
+            print('Date', response_header['Date'])
+            next_window_delta = next_window_time - time.time()
+            # XXX: workaround.. sleeping 15 minutes
+            next_window_delta = 900
+            print('Request limit hit: sleeping for %d seconds' \
+                  % (next_window_delta))
+            time.sleep(next_window_delta)
 
     def _encode_key_and_secret(self, consumer_key, consumer_secret):
         ck = quote(consumer_key)
@@ -71,10 +143,10 @@ class Client(object):
         encoded = base64.b64encode(s.encode('ascii'))
         return encoded
 
-    def _get_access_token(self, conf):
-        encoded = self._encode_key_and_secret(conf.consumer_key,
-                                              conf.consumer_secret)
-        request = Request(conf.request_token_url)
+    def _get_access_token(self):
+        encoded = self._encode_key_and_secret(self._conf.consumer_key,
+                                              self._conf.consumer_secret)
+        request = Request(self._conf.request_token_url)
         request.add_header('Content-Type',
                            'application/x-www-form-urlencoded;charset=UTF-8')
         request.add_header('Authorization',
